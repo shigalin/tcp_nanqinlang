@@ -44,10 +44,7 @@ check_kernel(){
 	already_devel=`rpm -qa | grep kernel-devel-4.12.10`
 	already_headers=`rpm -qa | grep kernel-headers-4.12.10`
 
-	if [[ "${surplus_count}" = "0" ]]; then
-		 echo -e "${Info} no surplus kernel need to remove"
-	else echo -e "${Info} removing surplus kernels" && delete_surplus
-	fi
+	delete_surplus_1
 
 	if [[ -z "${already_image}" ]]; then
 		 echo -e "${Info} installing image" && install_image
@@ -68,31 +65,32 @@ check_kernel(){
 
 }
 
-update-grub(){
-	[[ "${bit}" = "7" ]] && grub2-mkconfig -o /boot/grub2/grub.cfg && grub2-set-default 0
-	[[ "${bit}" = "6" ]] && sed -i '/default=/d' /boot/grub/grub.conf && echo -e "\ndefault=0\c" >> /boot/grub/grub.conf
-}
-
-delete_surplus(){
-	# surplus kernel count
+delete_surplus_1(){
 	#surplus_image=`rpm -qa | grep kernel | awk '{print $2}' | grep -v "4.12.10" | wc -l`
 	#surplus_devel=`rpm -qa | grep kernel-devel | awk '{print $2}' | grep -v "4.12.10" | wc -l`
 	#surplus_headers=`rpm -qa | grep kernel-headers | awk '{print $2}' | grep -v "4.12.10" | wc -l`
 
-	# surplus
 	surplus_count=`rpm -qa | grep kernel | grep -v "4.12.10" | wc -l`
-	surplus_sort=`rpm -qa | grep kernel | grep -v "4.12.10"`
-
-	#for((integer = 1; integer <= ${surplus_count}; integer++))
-	#do
-	#	 surplus_sort=`rpm -qa | grep kernel | grep -v "4.12.10"`
-	#	 yum remove -y ${surplus_sort}
-	#done
-
+	surplus_sort_1=`rpm -qa | grep kernel | grep -v "4.12.10"`
 	while [[ "${surplus_count}" > "1" ]]
 	do
-		yum remove -y ${surplus_sort}
+		yum remove -y ${surplus_sort_1}
+		surplus_count=`rpm -qa | grep kernel | grep -v "4.12.10" | wc -l`
+		surplus_sort_1=`rpm -qa | grep kernel | grep -v "4.12.10"`
 	done
+}
+
+delete_surplus_2(){
+	current=`uname -r | grep -v "4.12.10"`
+	if [[ -z "${current}" ]]; then
+		 surplus_sort_2=`rpm -qa | grep kernel | grep -v "4.12.10" | grep -v "dracut-kernel-004-409.el6_8.2.noarch"`
+		 while [[ ! -z "${surplus_sort_2}" ]]
+		 do
+			  yum remove -y ${surplus_sort_2}
+			  surplus_sort_2=`rpm -qa | grep kernel | grep -v "4.12.10" | grep -v "dracut-kernel-004-409.el6_8.2.noarch"`
+		 done
+	else echo -e "${Error} current running kernel is not v4.12.10, please check!"
+	fi
 }
 
 # achieve
@@ -111,18 +109,13 @@ install_headers(){
 	yum  install -y kernel-ml-headers-4.12.10-1.el${bit}.elrepo.x86_64.rpm
 }
 
-rpm_list(){
-	rpm -qa | grep kernel
+update-grub(){
+	[[ "${bit}" = "7" ]] && grub2-mkconfig -o /boot/grub2/grub.cfg && grub2-set-default 0
+	[[ "${bit}" = "6" ]] && sed -i '/default=/d' /boot/grub/grub.conf && echo -e "\ndefault=0\c" >> /boot/grub/grub.conf
 }
 
-install(){
-	check_system
-	check_root
-	check_ovz
-	directory
-	check_kernel
-	rpm_list
-	echo -e "${Info} 请确认此行上面的列表显示的内核版本后，重启以应用新内核"
+rpm_list(){
+	rpm -qa | grep kernel
 }
 
 maker(){
@@ -152,13 +145,23 @@ compile(){
 	cd .. && rm -rf make
 }
 
+install(){
+	check_system
+	check_root
+	check_ovz
+	directory
+	check_kernel
+	rpm_list
+	echo -e "${Info} 请确认此行上面的列表显示的内核版本后，重启以应用新内核"
+}
+
 start(){
 	check_system
 	check_root
 	check_ovz
 	directory
-	#delete_surplus && update-grub
-	yum update && yum groupinstall -y "Development Tools" && yum install -y libtool gcc gcc-c++
+	delete_surplus_2 && update-grub
+	yum update && yum groupinstall -y "Development Tools"
 	maker
 	sed -i '/net\.ipv4\.tcp_congestion_control/d' /etc/sysctl.conf
 	echo -e "\nnet.ipv4.tcp_congestion_control=nanqinlang\c" >> /etc/sysctl.conf && sysctl -p
