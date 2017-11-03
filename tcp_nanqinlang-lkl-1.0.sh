@@ -15,10 +15,8 @@ echo -e "${Green_font}
 
 check_system(){
 	cat /etc/issue | grep -q -E -i "debian" && release="debian"
-	sys_ver=`grep -oE  "[0-9.]+" /etc/issue`
 	bit=`uname -m`
 	[[ "${release}" != "debian" ]] && echo -e "${Error} only support Debian !" && exit 1
-	[[ "${sys_ver}" < "8" ]] && echo -e "${Error} only support Debian 8+ !" && exit 1
 	[[ "${bit}" != "x86_64" ]] && echo -e "${Error} only support 64 bit" && exit 1
 }
 
@@ -42,11 +40,34 @@ directory(){
 	cd /home/tcp_nanqinlang
 }
 
-config-haproxy(){
-	echo -e "${Info} 输入你想加速的端口号(默认 8080-9090):"
-	read -p "(输入单个端口号或端口段，例如：443 或 8000-9000):" port
-	[[ -z "${port}" ]] && port=8080-9090
+config(){
+	echo -e "${Info} 你想加速单个端口（例如 443）还是端口段(例如 8080-9090) ？\n1.单个端口\n2.端口段"
+	read -p "(输入数字以选择):" choose
+	while [[ ! "${choose}" =~ ^[1-2]$ ]]
+	do
+		echo -e "${Error} 无效输入"
+		echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" choose
+	done
 
+	if [[ "${choose}" == "1" ]]; then
+		 echo -e "${Info} 输入你想加速的端口"
+		 read -p "(输入单个端口号，例如：443，默认使用 443):" port1
+		 [[ -z "${port1}" ]] && port1=443
+		 config-haproxy-1
+		 config-redirect-1
+	else
+		 echo -e "${Info} 输入端口段的第一个端口号"
+		 read -p "(例如端口段为 8080-9090，则此处输入 8080，默认使用 8080):" port1
+		 [[ -z "${port1}" ]] && port1=8080
+		 echo -e "${Info} 输入端口段的第二个端口号"
+		 read -p "(例如端口段为 8080-9090，则此处输入 9090，默认使用 9090):" port2
+		 [[ -z "${port2}" ]] && port2=9090
+		 config-haproxy-2
+		 config-redirect-2
+	fi
+}
+
+config-haproxy-1(){
 echo -e "global
 
 defaults
@@ -58,21 +79,51 @@ timeout client 10000
 timeout server 10000
 
 frontend proxy-in
-bind *:${port}
+bind *:${port1}
 default_backend proxy-out
 
 backend proxy-out
 server server1 10.0.0.1 maxconn 20480\c" > haproxy.cfg
 }
 
-config-redirect(){
+config-haproxy-2(){
+echo -e "global
+
+defaults
+log global
+mode tcp
+option dontlognull
+timeout connect 5000
+timeout client 10000
+timeout server 10000
+
+frontend proxy-in
+bind *:${port1}-${port2}
+default_backend proxy-out
+
+backend proxy-out
+server server1 10.0.0.1 maxconn 20480\c" > haproxy.cfg
+}
+
+config-redirect-1(){
 echo -e "ip tuntap add lkl-tap mode tap
 ip addr add 10.0.0.1/24 dev lkl-tap
 ip link set lkl-tap up
 sysctl -w net.ipv4.ip_forward=1
 iptables -P FORWARD ACCEPT
 iptables -t nat -A POSTROUTING -o venet0 -j MASQUERADE
-iptables -t nat -A PREROUTING -i venet0 -p tcp --dport ${port} -j DNAT --to-destination 10.0.0.2
+iptables -t nat -A PREROUTING -i venet0 -p tcp --dport ${port1} -j DNAT --to-destination 10.0.0.2
+nohup /home/tcp_nanqinlang/load.sh &\c" > running.sh
+}
+
+config-redirect-2(){
+echo -e "ip tuntap add lkl-tap mode tap
+ip addr add 10.0.0.1/24 dev lkl-tap
+ip link set lkl-tap up
+sysctl -w net.ipv4.ip_forward=1
+iptables -P FORWARD ACCEPT
+iptables -t nat -A POSTROUTING -o venet0 -j MASQUERADE
+iptables -t nat -A PREROUTING -i venet0 -p tcp --dport ${port1}:${port2} -j DNAT --to-destination 10.0.0.2
 nohup /home/tcp_nanqinlang/load.sh &\c" > running.sh
 }
 
@@ -82,10 +133,10 @@ install(){
 	check_ovz
 	check_ldd
 	directory
+	config
 
     #haproxy config
-	apt-get install -y bc haproxy
-    [[ ! -f haproxy.cfg ]] && config-haproxy
+	apt-get update && apt-get install -y iptables bc haproxy
     [[ ! -f haproxy.cfg ]] && echo -e "${Error} not found haproxy config, please check !" && exit 1
 	chmod 7777 haproxy.cfg
 
@@ -100,7 +151,6 @@ install(){
 	chmod 7777 load.sh
 
     #apply redirect
-    [[ ! -f running.sh ]] && config-redirect
     [[ ! -f running.sh ]] && echo -e "${Error} not found redirect config, please check !" && exit 1
 	chmod 7777 running.sh
 
@@ -126,6 +176,7 @@ uninstall(){
 	check_root
 	killall haproxy && apt-get remove -y haproxy
 	rm -rf /home/tcp_nanqinlang
+	iptables -F
 	sed -i '/\/home\/tcp_nanqinlang\/running.sh/d' /etc/rc.local
 	echo -e "${Info} please remember ${reboot} to stop tcp_nanqinlang"
 }
