@@ -162,8 +162,11 @@ start(){
 	delete_surplus_2 && update-grub
 	yum update && yum groupinstall -y "Development Tools"
 	maker
+	sed -i '/net\.core\.default_qdisc/d' /etc/sysctl.conf
 	sed -i '/net\.ipv4\.tcp_congestion_control/d' /etc/sysctl.conf
-	echo -e "\nnet.ipv4.tcp_congestion_control=nanqinlang\c" >> /etc/sysctl.conf && sysctl -p
+	echo -e "\nnet.core.default_qdisc=fq" >> /etc/sysctl.conf
+	echo -e "net.ipv4.tcp_congestion_control=nanqinlang\c" >> /etc/sysctl.conf
+	sysctl -p
 	check_status
 }
 
@@ -187,6 +190,7 @@ status(){
 
 uninstall(){
 	check_root
+	sed -i '/net\.core\.default_qdisc=fq/d' /etc/sysctl.conf
 	sed -i '/net\.ipv4\.tcp_congestion_control=nanqinlang/d' /etc/sysctl.conf
 	sysctl -p
 	rm -rf /home/tcp_nanqinlang
