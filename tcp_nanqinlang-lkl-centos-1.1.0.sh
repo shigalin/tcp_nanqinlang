@@ -154,21 +154,23 @@ check-all(){
 	# check haproxy
 	yum install -y iptables bc haproxy
 
+	# check selfstart
+	[[ ! -f start.sh ]] && wget https://raw.githubusercontent.com/nanqinlang-tcp/tcp_nanqinlang/lkl/sh/start.sh
+	[[ ! -f start.sh ]] && echo -e "${Error} download start config failed, please check !" && exit 1
+
 	# give privilege
 	chmod -R 7777 /home/tcp_nanqinlang
 }
 
 # start immediately
 run-it-now(){
-	nohup /home/tcp_nanqinlang/load.sh &
-	/home/tcp_nanqinlang/redirect.sh
+	./start.sh
 }
 
 # start with reboot
 self-start(){
-	sed -i "s/exit 0/ /ig" /etc/rc.local
-	echo -e "\nnohup /home/tcp_nanqinlang/load.sh &" >> /etc/rc.d/rc.local
-	echo -e "/home/tcp_nanqinlang/redirect.sh\c" >> /etc/rc.d/rc.local
+	sed -i "s/exit 0/ /ig" /etc/rc.d/rc.local
+	echo -e "\nbash /home/tcp_nanqinlang/start.sh" >> /etc/rc.d/rc.local
 }
 
 
@@ -198,11 +200,10 @@ status(){
 uninstall(){
 	check_system
 	check_root
-	apt-get remove -y haproxy
+	yum remove -y haproxy
 	rm -rf /home/tcp_nanqinlang
 	#iptables -F
-	sed -i '/nohup \/home\/tcp_nanqinlang\/load.sh &/d' /etc/rc.d/rc.local
-	sed -i '/\/home\/tcp_nanqinlang\/redirect.sh/d' /etc/rc.d/rc.local
+	sed -i '/bash \/home\/tcp_nanqinlang\/start.sh/d' /etc/rc.d/rc.local
 	echo -e "${Info} please remember 重启 to stop tcp_nanqinlang"
 }
 
