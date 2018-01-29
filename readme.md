@@ -54,7 +54,7 @@ for `OpenVZ` via `LKL`, it's also a `devel` version, please do not use it with i
 # ldd > = 2.14
 # OpenVZ
 # devel
-wget https://raw.githubusercontent.com/nanqinlang-tcp/tcp_nanqinlang/lkl/tcp_nanqinlang-lkl-debian-1.1.1.sh
+wget --no-check-certificate https://raw.githubusercontent.com/shigalin/tcp_nanqinlang/lkl/tcp_nanqinlang-lkl-debian-1.1.1.sh
 bash tcp_nanqinlang-lkl-debian-1.1.1.sh
 ```
 ```bash
